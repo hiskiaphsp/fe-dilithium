@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path/path.dart';
 import 'package:fe/data/repository/digital_signature_repository.dart';
+import 'package:flutter_custom_selector/flutter_custom_selector.dart';
 
 class VerificationPage extends StatefulWidget {
   @override
@@ -15,17 +16,17 @@ class _VerificationPageState extends State<VerificationPage> {
   List<File> pickedPublicFile = [];
   List<File> pickedMessageFile = [];
   List<File> pickedSignatureFile = [];
+  String? selectedMode;
 
-  Future<void> pickedFile(List<File> selectFile) async {
-    var result = await FilePicker.platform.pickFiles(
+  Future<void> pickFile(List<File> fileList) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
     );
-    print(result);
 
     if (result != null) {
       setState(() {
-        selectFile.clear();
-        selectFile.add(File(result.files.single.path!));
+        fileList.clear();
+        fileList.add(File(result.files.single.path!));
       });
     }
   }
@@ -35,24 +36,8 @@ class _VerificationPageState extends State<VerificationPage> {
   }
 
   Future<void> verifySignature(BuildContext context) async {
-    if (pickedPublicFile.isEmpty || pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Text("Please select all files: public key, message, and signature."),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+    if (pickedPublicFile.isEmpty || pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty || selectedMode == null) {
+      showErrorDialog(context, "Please select all files and mode.");
       return;
     }
 
@@ -61,168 +46,178 @@ class _VerificationPageState extends State<VerificationPage> {
       File messageFile = pickedMessageFile.first;
       File signatureFile = pickedSignatureFile.first;
 
-      // Get all information from the server response
-      Map<dynamic, dynamic> result = await repository.verifyDetached(messageFile.path, signatureFile.path, publicFile.path);
+      var result = await repository.verifyDetached(
+        messageFile.path,
+        signatureFile.path,
+        publicFile.path,
+        selectedMode!,
+      );
 
       bool verified = result['verified'];
-      String executionTime = result['executionTime'];
-      Map<String, String> fileSizes = Map<String, String>.from(result['fileSizes']);
 
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Verification Result"),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(verified ? "Signature is verified." : "Signature verification failed."),
-                SizedBox(height: 10),
-                Text("Execution Time: $executionTime"),
-                SizedBox(height: 10),
-                Text("Public Key File:"),
-                Text("Name: ${basename(publicFile.path)}"),
-                Text("Size: ${fileSizes['publicKeyFileSize']}"),
-                SizedBox(height: 5),
-                Text("Message File:"),
-                Text("Name: ${basename(messageFile.path)}"),
-                Text("Size: ${fileSizes['pdfFileSize']}"),
-                SizedBox(height: 5),
-                Text("Signature File:"),
-                Text("Name: ${basename(signatureFile.path)}"),
-                Text("Size: ${fileSizes['signatureFileSize']}"),
-              ],
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+      showVerificationResultDialog(context, verified, publicFile, messageFile, signatureFile);
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Text("Failed to verify signature: $e"),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+      showErrorDialog(context, "Failed to verify signature: $e");
     }
   }
 
+  void showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Error"),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void showVerificationResultDialog(BuildContext context, bool verified, File publicFile, File messageFile, File signatureFile) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Verification Result"),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(verified ? "Signature is verified." : "Signature verification failed."),
+              SizedBox(height: 10),
+              buildFileDetailRow("Public Key File:", basename(publicFile.path)),
+              buildFileDetailRow("Message File:", basename(messageFile.path)),
+              buildFileDetailRow("Signature File:", basename(signatureFile.path)),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget buildFileDetailRow(String label, String fileName) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label),
+          SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  fileName,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 8),
+              
+            ],
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Verification Page'),
       ),
-      body: Center(
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => pickedFile(pickedPublicFile),
-                      child: Text('Select Public Key File'),
-                    ),
-                    SizedBox(height: 20),
-                    pickedPublicFile.isNotEmpty
-                        ? ListView.builder(
-                        itemCount: pickedPublicFile.length,
-                        shrinkWrap: true,
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () => openFile(pickedPublicFile[index]),
-                            child: Card(
-                              child: ListTile(
-                                leading: Icon(Icons.lock),
-                                title: Text(basename(pickedPublicFile[index].path)),
-                                subtitle: Text('${pickedPublicFile[index].lengthSync()} bytes'),
-                              ),
-                            ),
-                          );
-                        })
-                        : Container(),
-                    SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: () => pickedFile(pickedMessageFile),
-                      child: Text('Select Message File'),
-                    ),
-                    SizedBox(height: 20),
-                    pickedMessageFile.isNotEmpty
-                        ? ListView.builder(
-                        itemCount: pickedMessageFile.length,
-                        shrinkWrap: true,
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () => openFile(pickedMessageFile[index]),
-                            child: Card(
-                              child: ListTile(
-                                leading: Icon(Icons.message),
-                                title: Text(basename(pickedMessageFile[index].path)),
-                                subtitle: Text('${pickedMessageFile[index].lengthSync()} bytes'),
-                              ),
-                            ),
-                          );
-                        })
-                        : Container(),
-                    SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: () => pickedFile(pickedSignatureFile),
-                      child: Text('Select Signature File'),
-                    ),
-                    SizedBox(height: 20),
-                    pickedSignatureFile.isNotEmpty
-                        ? ListView.builder(
-                        itemCount: pickedSignatureFile.length,
-                        shrinkWrap: true,
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () => openFile(pickedSignatureFile[index]),
-                            child: Card(
-                              child: ListTile(
-                                leading: Icon(Icons.check_circle),
-                                title: Text(basename(pickedSignatureFile[index].path)),
-                                subtitle: Text('${pickedSignatureFile[index].lengthSync()} bytes'),
-                              ),
-                            ),
-                          );
-                        })
-                        : Container(),
-                  ],
-                ),
+              CustomSingleSelectField<String>(
+                items: ["Dilithium2", "Dilithium3", "Dilithium5"],
+                title: "Select Mode",
+                onSelectionDone: (value) {
+                  setState(() {
+                    selectedMode = value;
+                  });
+                },
+                itemAsString: (item) => item,
               ),
-              Container(
-                padding: EdgeInsets.all(16),
-                child: ElevatedButton(
-                  onPressed: () => verifySignature(context),
-                  child: Text('Verify Signature'),
-                ),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () => pickFile(pickedPublicFile),
+                child: Text('Select Public Key File'),
               ),
+              SizedBox(height: 10),
+              buildFileListView(pickedPublicFile, Icons.lock),
+              ElevatedButton(
+                onPressed: () => pickFile(pickedMessageFile),
+                child: Text('Select Message File'),
+              ),
+              SizedBox(height: 10),
+
+              buildFileListView(pickedMessageFile, Icons.message),
+              ElevatedButton(
+                onPressed: () => pickFile(pickedSignatureFile),
+                child: Text('Select Signature File'),
+              ),
+              SizedBox(height: 10),
+              buildFileListView(pickedSignatureFile, Icons.check_circle),
+              ElevatedButton(
+                onPressed: () => verifySignature(context),
+                child: Text('Verify Signature'),
+              ),
+              SizedBox(height: 10),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget buildFileListView(List<File> fileList, IconData icon) {
+    return fileList.isNotEmpty
+        ? ListView.builder(
+            itemCount: fileList.length,
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              return GestureDetector(
+                onTap: () => openFile(fileList[index]),
+                child: Card(
+                  child: ListTile(
+                    leading: Icon(icon),
+                    title: Text(
+                      basename(fileList[index].path),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${fileList[index].lengthSync()} bytes',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              );
+            },
+          )
+        : Container();
   }
 }

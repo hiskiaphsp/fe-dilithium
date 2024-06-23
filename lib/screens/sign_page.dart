@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path/path.dart';
 import 'package:fe/data/repository/digital_signature_repository.dart';
+import 'package:flutter_custom_selector/flutter_custom_selector.dart';
 
 class SignPage extends StatefulWidget {
   @override
@@ -15,119 +16,120 @@ class _SignPageState extends State<SignPage> {
   final DigitalSignatureRepository repository = DigitalSignatureRepository();
   List<File> pickedPrivateFile = [];
   List<File> pickedMessageFile = [];
+  String? selectedMode;
 
-  Future<void> pickedFile(List<File> selectFile) async {
-    var result = await FilePicker.platform.pickFiles(
+  Future<void> pickFile(List<File> fileList) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
     );
-    print(result);
 
     if (result != null) {
       setState(() {
-        selectFile.clear();
-        selectFile.add(File(result.files.single.path!));
+        fileList.clear();
+        fileList.add(File(result.files.single.path!));
       });
     }
   }
 
-  openFile(File file) {
+  void openFile(File file) {
     OpenFile.open(file.path);
   }
 
-  Future<void> generateSign(BuildContext context) async {
-    if (pickedPrivateFile.isEmpty || pickedMessageFile.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Text("Please select both private key file and message file."),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+  Future<void> generateSignature(BuildContext context) async {
+    if (pickedPrivateFile.isEmpty || pickedMessageFile.isEmpty || selectedMode == null) {
+      showErrorDialog(context, "Please select both private key file, message file, and mode.");
       return;
     }
-
-    final startTime = DateTime.now();
 
     try {
       File privateFile = pickedPrivateFile.first;
       File messageFile = pickedMessageFile.first;
 
-      await repository.signDetached(messageFile.path, privateFile.path);
+      await repository.signDetached(messageFile.path, privateFile.path, selectedMode!);
 
-      final endTime = DateTime.now();
-      final duration = endTime.difference(startTime).inMilliseconds;
-
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Success"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Signature generated successfully in $duration milliseconds."),
-                SizedBox(height: 10),
-                Text("Private Key File:"),
-                Text("Name: ${basename(privateFile.path)}"),
-                Text("Size: ${privateFile.lengthSync()} bytes"),
-                SizedBox(height: 10),
-                Text("Message File:"),
-                Text("Name: ${basename(messageFile.path)}"),
-                Text("Size: ${messageFile.lengthSync()} bytes"),
-              ],
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+      showSuccessDialog(context, privateFile, messageFile);
     } catch (e) {
-      final endTime = DateTime.now();
-      final duration = endTime.difference(startTime).inMilliseconds;
+      showErrorDialog(context, "Failed to generate signature: $e");
+    }
+  }
 
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Failed to generate signature: $e"),
-                SizedBox(height: 10),
-                Text("Execution time: $duration milliseconds"),
-              ],
+  void showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Error"),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("OK"),
             ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text("OK"),
+          ],
+        );
+      },
+    );
+  }
+
+  void showSuccessDialog(BuildContext context, File privateFile, File messageFile) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Success"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Signature generated successfully"),
+              SizedBox(height: 10),
+              buildFileDetailRow("Private Key File:", basename(privateFile.path), '${privateFile.lengthSync()} bytes'),
+              buildFileDetailRow("Message File:", basename(messageFile.path), '${messageFile.lengthSync()} bytes'),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget buildFileDetailRow(String label, String fileName, String fileSize) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label),
+          SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  fileName,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                fileSize,
+                style: TextStyle(color: Colors.grey),
               ),
             ],
-          );
-        },
-      );
-    }
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -136,72 +138,74 @@ class _SignPageState extends State<SignPage> {
       appBar: AppBar(
         title: Text('Sign Page'),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  ElevatedButton(
-                    onPressed: () => pickedFile(pickedPrivateFile),
-                    child: Text('Select Private Key File'),
-                  ),
-                  SizedBox(height: 20),
-                  pickedPrivateFile.isNotEmpty
-                      ? ListView.builder(
-                      itemCount: pickedPrivateFile.length,
-                      shrinkWrap: true,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () => openFile(pickedPrivateFile[index]),
-                          child: Card(
-                            child: ListTile(
-                              leading: Icon(Icons.lock), // Ubah ikon sesuai dengan berkas kunci pribadi
-                              title: Text(basename(pickedPrivateFile[index].path)),
-                              subtitle: Text('${pickedPrivateFile[index].lengthSync()} bytes'),
-                            ),
-                          ),
-                        );
-                      })
-                      : Container(),
-                  SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: () => pickedFile(pickedMessageFile),
-                    child: Text('Select Message File (PDF) '),
-                  ),
-                  SizedBox(height: 20),
-                  pickedMessageFile.isNotEmpty
-                      ? ListView.builder(
-                      itemCount: pickedMessageFile.length,
-                      shrinkWrap: true,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () => openFile(pickedMessageFile[index]),
-                          child: Card(
-                            child: ListTile(
-                              leading: Icon(Icons.message), // Ubah ikon sesuai dengan berkas pesan
-                              title: Text(basename(pickedMessageFile[index].path)),
-                              subtitle: Text('${pickedMessageFile[index].lengthSync()} bytes'),
-                            ),
-                          ),
-                        );
-                      })
-                      : Container(),
-                ],
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CustomSingleSelectField<String>(
+                items: ["Dilithium2", "Dilithium3", "Dilithium5"],
+                title: "Select Mode",
+                onSelectionDone: (value) {
+                  setState(() {
+                    selectedMode = value;
+                  });
+                },
+                itemAsString: (item) => item,
               ),
-            ),
-            Container(
-              padding: EdgeInsets.all(16),
-              child: ElevatedButton(
-                onPressed: () => generateSign(context),
-                child: Text('Generate Sign'),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () => pickFile(pickedPrivateFile),
+                child: Text('Select Private Key File'),
               ),
-            ),
-          ],
+              SizedBox(height: 10),
+              buildFileListView(pickedPrivateFile, Icons.lock),
+              ElevatedButton(
+                onPressed: () => pickFile(pickedMessageFile),
+                child: Text('Select Message File (PDF)'),
+              ),
+              SizedBox(height: 10),
+              buildFileListView(pickedMessageFile, Icons.message),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () => generateSignature(context),
+                child: Text('Generate Signature'),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget buildFileListView(List<File> fileList, IconData icon) {
+    return fileList.isNotEmpty
+        ? ListView.builder(
+            itemCount: fileList.length,
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              return GestureDetector(
+                onTap: () => openFile(fileList[index]),
+                child: Card(
+                  child: ListTile(
+                    leading: Icon(icon),
+                    title: Text(
+                      basename(fileList[index].path),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${fileList[index].lengthSync()} bytes',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              );
+            },
+          )
+        : Container();
   }
 }
