@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -132,6 +134,63 @@ class DigitalSignatureRepository {
       throw Exception("Failed to sign detached");
     }
   }
+  Future<void> signDetachedUrl(String messageUrl , String privateKeyPath, String mode) async {
+    try {
+      // Preparing the API endpoint URL
+      Uri apiUrl = Uri.parse("$baseUrl/sign-message-url");
+
+      // Creating multipart request
+      var request = http.MultipartRequest('POST', apiUrl);
+
+      // Adding private key file to the request
+      File privateKeyFile = File(privateKeyPath);
+      if (!privateKeyFile.existsSync()) {
+        throw Exception("Private key file does not exist");
+      }
+      request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
+
+      // Adding mode to the request
+      request.fields['mode'] = mode;
+
+      // Adding messageUrl to the request
+      request.fields['messageURL'] = messageUrl;
+
+      // Sending the request
+      var response = await request.send();
+
+      // Checking the response
+      if (response.statusCode == 200) {
+        // Saving the response as signature file
+        String downloadPath = await _getDownloadDirectoryPath();
+        String savePath = '$downloadPath/signature.sig';
+
+        // Check if file already exists
+        File file = File(savePath);
+        if (await file.exists()) {
+          // If file already exists, find a unique name
+          int count = 1;
+          String newSavePath;
+          do {
+            newSavePath = '$downloadPath/signature-$count.sig';
+            file = File(newSavePath);
+            count++;
+          } while (await file.exists());
+          savePath = newSavePath;
+        }
+
+        var bytes = await response.stream.toBytes();
+        await File(savePath).writeAsBytes(bytes, flush: true);
+        print("Signature file downloaded successfully: $savePath");
+      } else {
+        // Handling errors
+        print("Failed to download signature file. Status code: ${response.statusCode}");
+        throw Exception("Failed to sign detached");
+      }
+    } catch (error) {
+      print("Error signing detached: $error");
+      throw Exception("Failed to sign detached");
+    }
+  }
 
   Future<Map> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath, String mode) async {
     try {
@@ -173,6 +232,41 @@ class DigitalSignatureRepository {
           'verified': verified,
           // 'executionTime': executionTime,
           // 'fileSizes': fileSizes
+        };
+      } else {
+        // Handling errors
+        print("Failed to verify signature. Status code: ${response.statusCode}");
+        return {
+          'verified': false
+        };
+      }
+    } catch (error) {
+      print("Error verifying signature: $error");
+      throw Exception("Failed to verify signature: $error");
+    }
+  }
+
+  Future<Map> verifyDetachedUrl(String messageUrl, String signaturePath, String publicKeyPath, String mode) async {
+    try {
+      // Sending verification request to the server
+      Uri apiUrl = Uri.parse("$baseUrl/verify-signature-url");
+      var request = http.MultipartRequest('POST', apiUrl)
+        ..fields['messageURL'] = messageUrl
+        ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
+        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath))
+        ..fields['mode'] = mode;
+
+
+      var response = await request.send();
+
+      // Checking the response
+      if (response.statusCode == 200) {
+        // Parsing JSON response
+        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString());
+        bool verified = data['valid'];
+        print(verified);
+        return {
+          'verified': verified,
         };
       } else {
         // Handling errors
