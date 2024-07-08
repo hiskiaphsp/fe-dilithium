@@ -1,73 +1,188 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 class DigitalSignatureRepository {
-  final String baseUrl = "http://192.168.100.62:3000";
+  // final String baseUrl = "http://127.0.0.1:3000";
+  final String baseUrl = "http://127.0.0.1:8080/api/v1";
+
   final Dio _dio = Dio();
 
   Future<String> _getDownloadDirectoryPath() async {
     try {
-      if (Platform.isAndroid) {
-        Directory? externalDir = await getExternalStorageDirectory();
-        if (externalDir != null) {
-          String downloadPath = '${externalDir.path}';
-          return downloadPath;
-        }
+      // Get the document directory
+      Directory appDocDir = await getApplicationDocumentsDirectory();
+
+      // For iOS, use the Documents directory
+      if (Platform.isIOS) {
+        return '${appDocDir.path}/'; // This goes up one level to "On My iPhone"
       }
+
+      // For Android and other platforms, use the application documents directory
+      return appDocDir.path;
     } catch (e) {
       print('Error getting download directory path: $e');
+      throw Exception('Error getting download directory path');
     }
-    Directory appDocDir = await getApplicationDocumentsDirectory();
-    return appDocDir.path;
   }
 
-  Future<void> downloadKeyPair() async {
+  Future<void> downloadKeyPair(String mode) async {
     try {
-      Response response = await _dio.get("$baseUrl/keypair",
-          options: Options(responseType: ResponseType.bytes));
-
       String downloadPath = await _getDownloadDirectoryPath();
-      String savePath = '$downloadPath/file.zip';
-      print(savePath);
+      String savePath = '$downloadPath/keypair.zip';
+
+      // Check if file already exists
       File file = File(savePath);
-      await file.writeAsBytes(response.data, flush: true);
+      if (await file.exists()) {
+        // If file already exists, find a unique name
+        int count = 1;
+        String newSavePath;
+        do {
+          newSavePath = '$downloadPath/$mode-keypair-$count.zip';
+          file = File(newSavePath);
+          count++;
+        } while (await file.exists());
+        savePath = newSavePath;
+      }
+
+      // Send the POST request with the mode in the request body
+      Response response = await _dio.download(
+        "$baseUrl/generate-keypair",
+        savePath,
+        options: Options(method: 'POST'),
+        data: {
+          "mode": mode,
+        },
+        onReceiveProgress: (received, total) {
+          // Update progress indicator (optional)
+          if (total != -1) {
+            print('Download Progress: ${(received / total * 100).toStringAsFixed(0)}%');
+          }
+        },
+      );
+
+      print("Key pair downloaded successfully to: $savePath");
     } catch (error) {
       print("Error downloading key pair: $error");
       throw Exception("Failed to download key pair");
     }
   }
 
-  Future<void> signDetached(String pdfFilePath, String privateKeyPath) async {
+  Future<void> signDetached(String pdfFilePath, String privateKeyPath, String mode) async {
     try {
-      // Menyiapkan URL endpoint API Anda
-      Uri apiUrl = Uri.parse("$baseUrl/sign-detached");
+      // Preparing the API endpoint URL
+      Uri apiUrl = Uri.parse("$baseUrl/sign-message");
 
-      // Membuat request multipart
+      // Creating multipart request
       var request = http.MultipartRequest('POST', apiUrl);
 
-      // Menambahkan file PDF ke dalam request
-      request.files.add(await http.MultipartFile.fromPath('pdfFile', pdfFilePath));
+      // Adding PDF file to the request
+      File pdfFile = File(pdfFilePath);
+      if (!pdfFile.existsSync()) {
+        throw Exception("PDF file does not exist");
+      }
+      request.files.add(await http.MultipartFile.fromPath('message', pdfFilePath));
 
-      // Menambahkan file kunci pribadi ke dalam request
-      request.files.add(await http.MultipartFile.fromPath('privateKeyFile', privateKeyPath));
+      // Adding private key file to the request
+      File privateKeyFile = File(privateKeyPath);
+      if (!privateKeyFile.existsSync()) {
+        throw Exception("Private key file does not exist");
+      }
+      request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
 
-      // Mengirim request
+      // Adding mode to the request
+      request.fields['mode'] = mode;
+
+      // Sending the request
       var response = await request.send();
 
-      // Memeriksa respon
+      // Checking the response
       if (response.statusCode == 200) {
-        // Menyimpan respon sebagai file signature
+        // Saving the response as signature file
         String downloadPath = await _getDownloadDirectoryPath();
-        String savePath = '$downloadPath/signature.json';
-        var file = File(savePath);
-        await file.writeAsBytes(await response.stream.toBytes(), flush: true);
+        String savePath = '$downloadPath/signature.sig';
+
+        // Check if file already exists
+        File file = File(savePath);
+        if (await file.exists()) {
+          // If file already exists, find a unique name
+          int count = 1;
+          String newSavePath;
+          do {
+            newSavePath = '$downloadPath/signature-$count.sig';
+            file = File(newSavePath);
+            count++;
+          } while (await file.exists());
+          savePath = newSavePath;
+        }
+
+        var bytes = await response.stream.toBytes();
+        await File(savePath).writeAsBytes(bytes, flush: true);
         print("Signature file downloaded successfully: $savePath");
       } else {
-        // Menangani jika terjadi kesalahan
+        // Handling errors
+        print("Failed to download signature file. Status code: ${response.statusCode}");
+        throw Exception("Failed to sign detached");
+      }
+    } catch (error) {
+      print("Error signing detached: $error");
+      throw Exception("Failed to sign detached");
+    }
+  }
+  Future<void> signDetachedUrl(String messageUrl , String privateKeyPath, String mode) async {
+    try {
+      // Preparing the API endpoint URL
+      Uri apiUrl = Uri.parse("$baseUrl/sign-message-url");
+
+      // Creating multipart request
+      var request = http.MultipartRequest('POST', apiUrl);
+
+      // Adding private key file to the request
+      File privateKeyFile = File(privateKeyPath);
+      if (!privateKeyFile.existsSync()) {
+        throw Exception("Private key file does not exist");
+      }
+      request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
+
+      // Adding mode to the request
+      request.fields['mode'] = mode;
+
+      // Adding messageUrl to the request
+      request.fields['messageURL'] = messageUrl;
+
+      // Sending the request
+      var response = await request.send();
+
+      // Checking the response
+      if (response.statusCode == 200) {
+        // Saving the response as signature file
+        String downloadPath = await _getDownloadDirectoryPath();
+        String savePath = '$downloadPath/signature.sig';
+
+        // Check if file already exists
+        File file = File(savePath);
+        if (await file.exists()) {
+          // If file already exists, find a unique name
+          int count = 1;
+          String newSavePath;
+          do {
+            newSavePath = '$downloadPath/signature-$count.sig';
+            file = File(newSavePath);
+            count++;
+          } while (await file.exists());
+          savePath = newSavePath;
+        }
+
+        var bytes = await response.stream.toBytes();
+        await File(savePath).writeAsBytes(bytes, flush: true);
+        print("Signature file downloaded successfully: $savePath");
+      } else {
+        // Handling errors
         print("Failed to download signature file. Status code: ${response.statusCode}");
         throw Exception("Failed to sign detached");
       }
@@ -77,48 +192,84 @@ class DigitalSignatureRepository {
     }
   }
 
-  Future<Map> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath) async {
+  Future<Map> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath, String mode) async {
     try {
-      // Mencetak path file untuk debug
+      // Printing file paths for debugging
       print(pdfFilePath);
       print(signaturePath);
       print(publicKeyPath);
 
-      // Memastikan file paths tidak null
-      if (pdfFilePath == null || signaturePath == null || publicKeyPath == null) {
-        throw Exception("File paths cannot be null");
+      // Ensuring file paths are not null
+      if (pdfFilePath.isEmpty || signaturePath.isEmpty || publicKeyPath.isEmpty) {
+        throw Exception("File paths cannot be null or empty");
       }
 
-      // Memastikan file paths valid
+      // Ensuring files exist
       if (!File(pdfFilePath).existsSync() || !File(signaturePath).existsSync() || !File(publicKeyPath).existsSync()) {
         throw Exception("One or more files do not exist");
       }
 
-      // Mengirimkan permintaan verifikasi ke server
-      Uri apiUrl = Uri.parse("$baseUrl/verify-detached");
+      // Sending verification request to the server
+      Uri apiUrl = Uri.parse("$baseUrl/verify-signature");
       var request = http.MultipartRequest('POST', apiUrl)
-        ..files.add(await http.MultipartFile.fromPath('pdfFile', pdfFilePath))
-        ..files.add(await http.MultipartFile.fromPath('signatureFile', signaturePath))
-        ..files.add(await http.MultipartFile.fromPath('publicKeyFile', publicKeyPath));
+        ..files.add(await http.MultipartFile.fromPath('message', pdfFilePath))
+        ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
+        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath))
+        ..fields['mode'] = mode;  // Adding mode to the request
 
       var response = await request.send();
 
-      // Memeriksa respon
+      // Checking the response
       if (response.statusCode == 200) {
-        // Memecah JSON respon
+        // Parsing JSON response
         Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString());
-        bool verified = data['verified'];
-        String executionTime = data['executionTime'];
-        Map<String, String> fileSizes = Map<String, String>.from(data['fileSizes']);
+        bool verified = data['valid'];
+        // String executionTime = data['executionTime'];
+        // Map<String, String> fileSizes = Map<String, String>.from(data['fileSizes']);
 
         print(verified);
         return {
           'verified': verified,
-          'executionTime': executionTime,
-          'fileSizes': fileSizes
+          // 'executionTime': executionTime,
+          // 'fileSizes': fileSizes
         };
       } else {
-        // Menangani jika terjadi kesalahan
+        // Handling errors
+        print("Failed to verify signature. Status code: ${response.statusCode}");
+        return {
+          'verified': false
+        };
+      }
+    } catch (error) {
+      print("Error verifying signature: $error");
+      throw Exception("Failed to verify signature: $error");
+    }
+  }
+
+  Future<Map> verifyDetachedUrl(String messageUrl, String signaturePath, String publicKeyPath, String mode) async {
+    try {
+      // Sending verification request to the server
+      Uri apiUrl = Uri.parse("$baseUrl/verify-signature-url");
+      var request = http.MultipartRequest('POST', apiUrl)
+        ..fields['messageURL'] = messageUrl
+        ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
+        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath))
+        ..fields['mode'] = mode;
+
+
+      var response = await request.send();
+
+      // Checking the response
+      if (response.statusCode == 200) {
+        // Parsing JSON response
+        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString());
+        bool verified = data['valid'];
+        print(verified);
+        return {
+          'verified': verified,
+        };
+      } else {
+        // Handling errors
         print("Failed to verify signature. Status code: ${response.statusCode}");
         return {
           'verified': false
@@ -130,4 +281,3 @@ class DigitalSignatureRepository {
     }
   }
 }
-
