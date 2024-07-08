@@ -8,7 +8,7 @@ class DocumentRepository {
   final Dio _dio;
   final String baseUrl;
 
-  DocumentRepository({Dio? dio, this.baseUrl = 'http://127.0.0.1:8080'})
+  DocumentRepository({Dio? dio, this.baseUrl = 'http://127.0.0.1:8080/api/v1'})
       : _dio = dio ?? Dio();
 
   Future<List<FileInfo>> fetchDocuments() async {
@@ -94,4 +94,47 @@ class DocumentRepository {
       throw Exception('Failed to load documents: $e');
     }
   }
+
+  Future<Map<String, dynamic>> analyze(File file, String mode) async {
+    try {
+      String fileName = file.path.split('/').last; // Extract filename from path
+      FormData formData = FormData.fromMap({
+        'message': await MultipartFile.fromFile(
+          file.path,
+          filename: fileName,
+        ),
+        'mode': mode,
+      });
+
+      final response = await _dio.post('$baseUrl/analyze', data: formData);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to add document');
+      }
+
+      return response.data;
+    } catch (e) {
+      throw Exception('Failed to add document: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> analyzeUrl(String file, String mode) async {
+    try {
+      FormData formData = FormData.fromMap({
+        'messageURL': file,
+        'mode': mode,
+      });
+
+      final response = await _dio.post('$baseUrl/analyze-url', data: formData);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to add document');
+      }
+
+      return response.data;
+    } catch (e) {
+      throw Exception('Failed to add document: $e');
+    }
+  }
+
 }

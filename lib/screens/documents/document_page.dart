@@ -1,10 +1,11 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:fe/data/models/document.dart';
 import 'package:fe/screens/documents/widgets/document_card.dart';
 import 'package:fe/data/repository/document_repository.dart';
 import 'package:file_picker/file_picker.dart';
+
+import 'package:particles_fly/particles_fly.dart'; 
 
 class DocumentPage extends StatefulWidget {
   @override
@@ -56,7 +57,7 @@ class _DocumentPageState extends State<DocumentPage> {
         SnackBar(
           content: Text('Document added successfully'),
           backgroundColor: Colors.green,
-          ),
+        ),
       );
       setState(() {
         _fileSelected = false;
@@ -64,43 +65,55 @@ class _DocumentPageState extends State<DocumentPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to add document: $e')
-          ),
+          content: Text('Failed to add document: $e'),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    Size size = MediaQuery.of(context).size; // Get screen size
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Documents'),
       ),
-      body: FutureBuilder<List<FileInfo>>(
-        future: futureDocuments,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No documents found'));
-          } else {
-            return RefreshIndicator(
-              onRefresh: _refreshDocuments,
-              child: ListView.builder(
-                itemCount: snapshot.data!.length,
-                itemBuilder: (context, index) {
-                  FileInfo fileInfo = snapshot.data![index];
-                  return DocumentCard(
-                    fileInfo: fileInfo,
-                    onDelete: _refreshDocuments, // Pass onDelete callback
-                  );
-                },
-              ),
-            );
-          }
-        },
+      body: Stack(
+        children: [
+          ParticlesFly( // ParticlesFly widget
+            height: size.height,
+            width: size.width,
+            connectDots: true,
+            numberOfParticles: 40,
+          ),
+          FutureBuilder<List<FileInfo>>(
+            future: futureDocuments,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('No documents found'));
+              } else {
+                return RefreshIndicator(
+                  onRefresh: _refreshDocuments,
+                  child: ListView.builder(
+                    itemCount: snapshot.data!.length,
+                    itemBuilder: (context, index) {
+                      FileInfo fileInfo = snapshot.data![index];
+                      return DocumentCard(
+                        fileInfo: fileInfo,
+                        onDelete: _refreshDocuments, // Pass onDelete callback
+                      );
+                    },
+                  ),
+                );
+              }
+            },
+          ),
+        ],
       ),
       floatingActionButton: _fileSelected
           ? FloatingActionButton(

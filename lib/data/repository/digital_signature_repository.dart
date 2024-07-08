@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 
 class DigitalSignatureRepository {
   // final String baseUrl = "http://127.0.0.1:3000";
-  final String baseUrl = "http://127.0.0.1:8080";
+  final String baseUrl = "http://127.0.0.1:8080/api/v1";
 
   final Dio _dio = Dio();
 

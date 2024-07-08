@@ -2,32 +2,33 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
+import 'package:quickalert/quickalert.dart';
 import 'package:path/path.dart';
 import 'package:fe/data/repository/digital_signature_repository.dart';
 import 'package:flutter_custom_selector/flutter_custom_selector.dart';
 import 'package:fe/screens/widgets/file_list_view.dart';
 import 'package:fe/data/repository/document_repository.dart';
 import 'package:fe/data/models/document.dart';
-import 'package:quickalert/quickalert.dart';
+import 'package:dio/dio.dart';
 import 'package:particles_fly/particles_fly.dart';
 
-class SignPage extends StatefulWidget {
+class AnalyzePage extends StatefulWidget {
   final bool isOnline;
 
-  SignPage({required this.isOnline});
+  AnalyzePage({required this.isOnline});
   @override
-  _SignPageState createState() => _SignPageState();
+  _AnalyzePageState createState() => _AnalyzePageState();
 }
 
-class _SignPageState extends State<SignPage> {
+class _AnalyzePageState extends State<AnalyzePage> {
   final DigitalSignatureRepository repository = DigitalSignatureRepository();
   final DocumentRepository documentRepository = DocumentRepository();
-  List<File> pickedPrivateFile = [];
-  List<File> pickedMessageFile = [];
+
   String? selectedMode;
   String? selectedUrl;
   List<FileInfo> fileInfos = [];
   List? selectedFileName = [];
+  List<File> pickedMessageFile = [];
 
   @override
   void initState() {
@@ -65,41 +66,61 @@ class _SignPageState extends State<SignPage> {
 
   Future<void> generateSignature(BuildContext context) async {
     try {
-      File privateFile = pickedPrivateFile.first;
-      if (widget.isOnline) {
-        await repository.signDetachedUrl(selectedUrl!, privateFile.path, selectedMode!);
-        showSuccessDialogOnline(context, privateFile, selectedFileName!);
-      } else {
-        File messageFile = pickedMessageFile.first;
-        await repository.signDetached(messageFile.path, privateFile.path, selectedMode!);
-        showSuccessDialogOffline(context, privateFile, messageFile);
+      if (selectedMode == null) {
+        showErrorAlert(context, "Please select a mode");
+        return;
       }
+
+      Map<String, dynamic> result;
+      if (widget.isOnline) {
+        if (selectedUrl == null) {
+          showErrorAlert(context, "Please select a document");
+          return;
+        }
+        result = await documentRepository.analyzeUrl(selectedUrl!, selectedMode!);
+      } else {
+        if (pickedMessageFile.isEmpty) {
+          showErrorAlert(context, "Please select the required files");
+          return;
+        }
+        File messageFile = pickedMessageFile.first;
+        result = await documentRepository.analyze(messageFile, selectedMode!);
+      }
+
+      showSuccessAlert(context, result);
     } catch (e) {
-      showErrorDialog(context, "Failed to generate signature: $e");
+      showErrorAlert(context, "Failed to generate signature: $e");
     }
   }
 
-  void showErrorDialog(BuildContext context, String message) {
+  void showErrorAlert(BuildContext context, String message) {
     QuickAlert.show(
       context: context,
       type: QuickAlertType.error,
+      title: 'Error',
       text: message,
+      confirmBtnText: 'OK',
       confirmBtnColor: Color(0xFFDE0339),
-      confirmBtnText: 'OK',
     );
   }
 
-  void showSuccessDialogOnline(BuildContext context, File privateFile, List fileName) {
+  void showSuccessAlert(BuildContext context, Map<String, dynamic> result) {
     QuickAlert.show(
       context: context,
       type: QuickAlertType.success,
-      text: "Signature generated successfully",
+      title: 'Success',
       widget: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          buildFileDetailRow("Private Key File:", basename(privateFile.path), '${privateFile.lengthSync()} bytes'),
-          buildFileDetailRow("Signed File:", fileName[0], '${fileName[1]} bytes'),
+          Text("Analyze successfully"),
+          SizedBox(height: 10),
+          buildFileDetailRow("Key Generation Time:", "${result['key_generation_time']} ms"),
+          buildFileDetailRow("Private Key Size:", "${result['private_key_size_bytes']} bytes"),
+          buildFileDetailRow("Public Key Size:", "${result['public_key_size_bytes']} bytes"),
+          buildFileDetailRow("Signature Size:", "${result['signature_size_bytes']} bytes"),
+          buildFileDetailRow("Signing Time:", "${result['signing_time']} ms"),
+          buildFileDetailRow("Verification Time:", "${result['verification_time']} ms"),
+          buildFileDetailRow("Valid:", "${result['valid']}"),
         ],
       ),
       confirmBtnColor: Color(0xFF18c46c),
@@ -107,25 +128,7 @@ class _SignPageState extends State<SignPage> {
     );
   }
 
-  void showSuccessDialogOffline(BuildContext context, File privateFile, File messageFile) {
-    QuickAlert.show(
-      context: context,
-      type: QuickAlertType.success,
-      text: "Signature generated successfully",
-      widget: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          buildFileDetailRow("Private Key File:", basename(privateFile.path), '${privateFile.lengthSync()} bytes'),
-          buildFileDetailRow("Message File:", basename(messageFile.path), '${messageFile.lengthSync()} bytes'),
-        ],
-      ),
-      confirmBtnColor: Color(0xFF18c46c),
-      confirmBtnText: 'OK',
-    );
-  }
-
-  Widget buildFileDetailRow(String label, String fileName, String fileSize) {
+  Widget buildFileDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -133,22 +136,9 @@ class _SignPageState extends State<SignPage> {
         children: [
           Text(label),
           SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  fileName,
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(width: 8),
-              Text(
-                fileSize,
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
+          Text(
+            value,
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -159,9 +149,10 @@ class _SignPageState extends State<SignPage> {
   Widget build(BuildContext context) {
     List<String> fileNames = fileInfos.map((fileInfo) => fileInfo.document.filename).toList();
     final size = MediaQuery.of(context).size;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sign Page'),
+        title: Text('Analyze Page'),
       ),
       body: Stack(
         children: [
@@ -169,7 +160,7 @@ class _SignPageState extends State<SignPage> {
             height: size.height,
             width: size.width,
             connectDots: true,
-            numberOfParticles: 30,
+            numberOfParticles: 40,
           ),
           SingleChildScrollView(
             child: Padding(
@@ -187,7 +178,7 @@ class _SignPageState extends State<SignPage> {
                     },
                     itemAsString: (item) => item,
                   ),
-                  SizedBox(height: 10,),
+                  SizedBox(height: 10),
                   if (widget.isOnline) // Tampilkan hanya jika isOnline true
                     CustomSingleSelectField<String>(
                       items: fileNames, // Gunakan fileNames sebagai items
@@ -203,12 +194,6 @@ class _SignPageState extends State<SignPage> {
                       itemAsString: (item) => item,
                     ),
                   SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () => pickFile(pickedPrivateFile),
-                    child: Text('Select Private Key File'),
-                  ),
-                  SizedBox(height: 10),
-                  FileListView(fileList: pickedPrivateFile, icon: Icons.lock),
                   if (!widget.isOnline) // Tampilkan hanya jika isOnline false
                     ElevatedButton(
                       onPressed: () => pickFile(pickedMessageFile),
