@@ -88,34 +88,39 @@ class MyHomePage extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    showDocumentSourceAlert(context, 'Analyze', (valueOnline) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => AnalyzePage(isOnline: valueOnline)),
-                      );
-                    });
-                  },
-                  icon: Icon(Icons.timelapse),
-                  label: Text('Analyze'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: Size(200, 50),
-                  ),
-                ),
-                SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => DocumentPage()),
-                    );
-                  },
-                  icon: Icon(Icons.folder),
-                  label: Text('Documents'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: Size(200, 50),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        showDocumentSourceAlert(context, 'Time Execution', (valueOnline) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => AnalyzePage(isOnline: valueOnline)),
+                          );
+                        });
+                      },
+                      icon: Icon(Icons.timelapse),
+                      label: Text('Time Execution'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(160, 50), // Adjust the width as needed
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => DocumentPage()),
+                        );
+                      },
+                      icon: Icon(Icons.folder),
+                      label: Text('Documents'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: Size(160, 50), // Adjust the width as needed
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

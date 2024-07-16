@@ -48,58 +48,74 @@ class _VerificationPageState extends State<VerificationPage> {
     }
   }
 
-  Future<void> pickFile(List<File> fileList) async {
+  Future<void> pickFile(BuildContext context, List<File> fileList, List<String> allowedExtensions) async {
+    const int maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
+      type: FileType.any,
     );
 
     if (result != null) {
+      File pickedFile = File(result.files.single.path!);
+      int fileSize = await pickedFile.length();
+
+      if (fileSize > maxFileSize) {
+        showErrorDialog(context, "File size exceeds 5MB. Please select a smaller file.");
+        return;
+      }
+
+      String extension = pickedFile.path.split('.').last;
+      if (!allowedExtensions.contains(extension)) {
+        showErrorDialog(context, "Invalid file type. Please select a ${allowedExtensions.join(', ')} file");
+        return;
+      }
+
       setState(() {
         fileList.clear();
-        fileList.add(File(result.files.single.path!));
+        fileList.add(pickedFile);
       });
     }
   }
 
-  openFile(File file) {
-    OpenFile.open(file.path);
+
+void verifySignature(BuildContext context) async {
+  if (pickedPublicFile.isEmpty || selectedMode == null || (!widget.isOnline && (pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty))) {
+    showErrorDialog(context, "Please select all files and mode.");
+    return;
   }
 
-  Future<void> verifySignature(BuildContext context) async {
-    if (pickedPublicFile.isEmpty || selectedMode == null || (!widget.isOnline && (pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty))) {
-      showErrorDialog(context, "Please select all files and mode.");
-      return;
-    }
+  try {
+    File publicFile = pickedPublicFile.first;
+    File signatureFile = pickedSignatureFile.first;
+    int executionTime;
 
-    try {
-      File publicFile = pickedPublicFile.first;
-      File signatureFile = pickedSignatureFile.first;
-
-      if (widget.isOnline) {
-        var result = await repository.verifyDetachedUrl(
-          selectedMessageUrl!,
-          signatureFile.path,
-          publicFile.path,
-          selectedMode!,
-        );
-        bool verified = result['verified'];
-        showVerificationResultDialogOnline(context, verified, selectedFileName!, publicFile, signatureFile);
-      } else {
-        File messageFile = pickedMessageFile.first;
-        File signatureFile = pickedSignatureFile.first;
-        var result = await repository.verifyDetached(
-          messageFile.path,
-          signatureFile.path,
-          publicFile.path,
-          selectedMode!,
-        );
-        bool verified = result['verified'];
-        showVerificationResultDialogOffline(context, verified, publicFile, messageFile, signatureFile);
-      }
-    } catch (e) {
-      showErrorDialog(context, "Failed to verify signature: $e");
+    if (widget.isOnline) {
+      var result = await repository.verifyDetachedUrl(
+        selectedMessageUrl!,
+        signatureFile.path,
+        publicFile.path,
+        selectedMode!,
+      );
+      bool verified = result['verified'];
+      executionTime = result['executionTime'];
+      showVerificationResultDialogOnline(context, verified, selectedFileName!, publicFile, signatureFile, executionTime);
+    } else {
+      File messageFile = pickedMessageFile.first;
+      var result = await repository.verifyDetached(
+        messageFile.path,
+        signatureFile.path,
+        publicFile.path,
+        selectedMode!,
+      );
+      bool verified = result['verified'];
+      executionTime = result['executionTime'];
+      showVerificationResultDialogOffline(context, verified, publicFile, messageFile, signatureFile, executionTime);
     }
+  } catch (e) {
+    showErrorDialog(context, "Failed to verify signature: $e");
   }
+}
 
   void showErrorDialog(BuildContext context, String message) {
     QuickAlert.show(
@@ -108,10 +124,11 @@ class _VerificationPageState extends State<VerificationPage> {
       title: "Error",
       text: message,
       confirmBtnText: "OK",
+      confirmBtnColor: Color(0xFFDE0339),
     );
   }
 
-  void showVerificationResultDialogOnline(BuildContext context, bool verified, List fileName, File publicFile, File signatureFile) {
+  void showVerificationResultDialogOnline(BuildContext context, bool verified, List fileName, File publicFile, File signatureFile, int executionTime) {
     QuickAlert.show(
       context: context,
       type: verified ? QuickAlertType.success : QuickAlertType.error,
@@ -126,6 +143,8 @@ class _VerificationPageState extends State<VerificationPage> {
           buildFileDetailRow("Public Key File:", basename(publicFile.path), '${publicFile.lengthSync()} bytes'),
           buildFileDetailRow("Signed File:", fileName[0], '${fileName[1]} bytes'),
           buildFileDetailRow("Signature File:", basename(signatureFile.path), '${signatureFile.lengthSync()} bytes'),
+          SizedBox(height: 10),
+          Text("Execution Time: $executionTime μs"),
         ],
       ),
       confirmBtnText: "OK",
@@ -134,13 +153,27 @@ class _VerificationPageState extends State<VerificationPage> {
     );
   }
 
-  void showVerificationResultDialogOffline(BuildContext context, bool verified, File publicFile, File messageFile, File signatureFile) {
+  void showVerificationResultDialogOffline(BuildContext context, bool verified, File publicFile, File messageFile, File signatureFile, int executionTime) {
     QuickAlert.show(
       context: context,
       type: verified ? QuickAlertType.success : QuickAlertType.error,
       title: "Verification Result",
-      text: verified ? "Signature is verified." : "Signature verification failed.",
+      widget: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 10),
+          Text(verified ? "Signature is Verified." : "Signature verification failed."),
+          SizedBox(height: 10),
+          buildFileDetailRow("Public Key File:", basename(publicFile.path), '${publicFile.lengthSync()} bytes'),
+          buildFileDetailRow("Message File:", basename(messageFile.path), '${messageFile.lengthSync()} bytes'),
+          buildFileDetailRow("Signature File:", basename(signatureFile.path), '${signatureFile.lengthSync()} bytes'),
+          SizedBox(height: 10),
+          Text("Execution Time: $executionTime μs"),
+        ],
+      ),
       confirmBtnText: "OK",
+      confirmBtnColor: verified ? Color(0xFF18c46c) : Color(0xFFDE0339),
       onConfirmBtnTap: () => Navigator.of(context).pop(),
     );
   }
@@ -225,20 +258,20 @@ class _VerificationPageState extends State<VerificationPage> {
                     ),
                   if (!widget.isOnline)
                     ElevatedButton(
-                      onPressed: () => pickFile(pickedMessageFile),
+                      onPressed: () => pickFile(context, pickedMessageFile, ["pdf"]),
                       child: Text('Select Message File'),
                     ),
                   SizedBox(height: 10),
                   if (!widget.isOnline)
                     FileListView(fileList: pickedMessageFile, icon: Icons.message),
                   ElevatedButton(
-                    onPressed: () => pickFile(pickedPublicFile),
+                    onPressed: () => pickFile(context, pickedPublicFile, ["key"]),
                     child: Text('Select Public Key File'),
                   ),
                   SizedBox(height: 10),
                   FileListView(fileList: pickedPublicFile, icon: Icons.lock),
                   ElevatedButton(
-                    onPressed: () => pickFile(pickedSignatureFile),
+                    onPressed: () => pickFile(context, pickedSignatureFile, ["sig"]),
                     child: Text('Select Signature File'),
                   ),
                   SizedBox(height: 10),

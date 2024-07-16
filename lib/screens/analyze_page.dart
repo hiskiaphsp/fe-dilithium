@@ -47,18 +47,37 @@ class _AnalyzePageState extends State<AnalyzePage> {
     }
   }
 
-  Future<void> pickFile(List<File> fileList) async {
+  Future<void> pickFile(BuildContext context, List<File> fileList, List<String> allowedExtensions) async {
+    const int maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
+      type: FileType.any,
     );
 
     if (result != null) {
+      File pickedFile = File(result.files.single.path!);
+      int fileSize = await pickedFile.length();
+
+      if (fileSize > maxFileSize) {
+        showErrorAlert(context, "File size exceeds 5MB. Please select a smaller file.");
+        return;
+      }
+
+      String extension = pickedFile.path.split('.').last;
+      if (!allowedExtensions.contains(extension)) {
+        showErrorAlert(context, "Invalid file type. Please select a ${allowedExtensions.join(', ')} file");
+        return;
+      }
+
       setState(() {
         fileList.clear();
-        fileList.add(File(result.files.single.path!));
+        fileList.add(pickedFile);
       });
     }
   }
+
+
 
   void openFile(File file) {
     OpenFile.open(file.path);
@@ -103,6 +122,7 @@ class _AnalyzePageState extends State<AnalyzePage> {
       confirmBtnColor: Color(0xFFDE0339),
     );
   }
+  
 
   void showSuccessAlert(BuildContext context, Map<String, dynamic> result) {
     QuickAlert.show(
@@ -112,14 +132,15 @@ class _AnalyzePageState extends State<AnalyzePage> {
       widget: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Analyze successfully"),
+          Text("Time Execution successfully"),
           SizedBox(height: 10),
-          buildFileDetailRow("Key Generation Time:", "${result['key_generation_time']} ms"),
+          // buildFileDetailRow("Key Generation Time:", "${result['key_generation_time']} μs"),
+          buildFileDetailRow("Message File Size:", "${result['message_size_bytes']} bytes"),
           buildFileDetailRow("Private Key Size:", "${result['private_key_size_bytes']} bytes"),
           buildFileDetailRow("Public Key Size:", "${result['public_key_size_bytes']} bytes"),
           buildFileDetailRow("Signature Size:", "${result['signature_size_bytes']} bytes"),
-          buildFileDetailRow("Signing Time:", "${result['signing_time']} ms"),
-          buildFileDetailRow("Verification Time:", "${result['verification_time']} ms"),
+          buildFileDetailRow("Signing Time:", "${result['signing_time']} μs"),
+          buildFileDetailRow("Verification Time:", "${result['verification_time']} μs"),
           buildFileDetailRow("Valid:", "${result['valid']}"),
         ],
       ),
@@ -130,12 +151,12 @@ class _AnalyzePageState extends State<AnalyzePage> {
 
   Widget buildFileDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label),
-          SizedBox(height: 4),
+          SizedBox(height: 1),
           Text(
             value,
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -152,7 +173,7 @@ class _AnalyzePageState extends State<AnalyzePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Analyze Page'),
+        title: Text('Time Execution Page'),
       ),
       body: Stack(
         children: [
@@ -196,7 +217,7 @@ class _AnalyzePageState extends State<AnalyzePage> {
                   SizedBox(height: 10),
                   if (!widget.isOnline) // Tampilkan hanya jika isOnline false
                     ElevatedButton(
-                      onPressed: () => pickFile(pickedMessageFile),
+                      onPressed: () => pickFile(context, pickedMessageFile, ["pdf"]),
                       child: Text('Select Message File (PDF)'),
                     ),
                   SizedBox(height: 10),
@@ -204,7 +225,7 @@ class _AnalyzePageState extends State<AnalyzePage> {
                   SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: () => generateSignature(context),
-                    child: Text('Generate Signature'),
+                    child: Text('Submit'),
                   ),
                 ],
               ),

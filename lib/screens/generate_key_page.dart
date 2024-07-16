@@ -25,14 +25,15 @@ class _GenerateKeyPageState extends State<GenerateKeyPage> {
     String message;
     Color backgroundColor;
     bool type;
+    int? executionTime;
 
     try {
       if (selectedString != null) {
-        await _repository.downloadKeyPair(selectedString!); // Pass the selected mode
-        message = 'Key pair downloaded successfully';
+        var result = await _repository.downloadKeyPair(selectedString!); // Pass the selected mode
+        executionTime = result['executionTime'];
+        message = 'Key pair downloaded successfully\nExecution Time: ${executionTime} μs';
         backgroundColor = Colors.white;
         type = true;
-
       } else {
         message = 'Please select a mode';
         backgroundColor = Colors.white;

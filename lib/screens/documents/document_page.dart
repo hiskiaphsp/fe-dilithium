@@ -4,8 +4,8 @@ import 'package:fe/data/models/document.dart';
 import 'package:fe/screens/documents/widgets/document_card.dart';
 import 'package:fe/data/repository/document_repository.dart';
 import 'package:file_picker/file_picker.dart';
-
-import 'package:particles_fly/particles_fly.dart'; 
+import 'package:quickalert/quickalert.dart';
+import 'package:particles_fly/particles_fly.dart';
 
 class DocumentPage extends StatefulWidget {
   @override
@@ -32,13 +32,26 @@ class _DocumentPageState extends State<DocumentPage> {
 
   Future<void> _pickAndUploadFile() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles();
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
 
       if (result != null) {
-        setState(() {
-          _selectedFile = File(result.files.single.path!);
-          _fileSelected = true;
-        });
+        File file = File(result.files.single.path!);
+        if (file.lengthSync() > 5 * 1024 * 1024) { // Check if file size is greater than 5 MB
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File size exceeds 5 MB'),
+              backgroundColor: Colors.red, // Set the background color to red
+            ),
+          );
+        } else {
+          setState(() {
+            _selectedFile = file;
+            _fileSelected = true;
+          });
+        }
       } else {
         // User canceled the picker
       }
@@ -69,6 +82,28 @@ class _DocumentPageState extends State<DocumentPage> {
         ),
       );
     }
+  }
+
+  void _showUploadConfirmationDialog() {
+    QuickAlert.show(
+      context: context,
+      type: QuickAlertType.confirm,
+      title: 'Confirm Upload',
+      text: 'Do you want to upload the selected file?',
+      confirmBtnText: 'Confirm',
+      cancelBtnText: 'Cancel',
+      confirmBtnColor: Color(0xFF33cdbb),
+      onCancelBtnTap: () {
+        Navigator.of(context).pop();
+        setState(() {
+          _fileSelected = false;
+        });
+      },
+      onConfirmBtnTap: () {
+        Navigator.of(context).pop();
+        _uploadFile();
+      },
+    );
   }
 
   @override
@@ -117,32 +152,7 @@ class _DocumentPageState extends State<DocumentPage> {
       ),
       floatingActionButton: _fileSelected
           ? FloatingActionButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: Text('Confirm Upload'),
-                      content: Text('Do you want to upload the selected file?'),
-                      actions: <Widget>[
-                        TextButton(
-                          child: Text('Cancel'),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                        ),
-                        TextButton(
-                          child: Text('Confirm'),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _uploadFile();
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+              onPressed: _showUploadConfirmationDialog,
               child: Icon(Icons.cloud_upload),
             )
           : FloatingActionButton(

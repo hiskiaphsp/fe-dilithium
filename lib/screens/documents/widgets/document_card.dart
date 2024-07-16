@@ -3,6 +3,7 @@ import 'package:fe/data/models/document.dart';
 import 'package:fe/screens/documents/widgets/pdf_preview.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
 import 'package:fe/data/repository/document_repository.dart';
+import 'package:quickalert/quickalert.dart';
 
 class DocumentCard extends StatelessWidget {
   final FileInfo fileInfo;
@@ -10,6 +11,25 @@ class DocumentCard extends StatelessWidget {
   final Function onDelete; // Callback to refresh document list
 
   DocumentCard({required this.fileInfo, required this.onDelete});
+
+  void _showDeleteConfirmationDialog(BuildContext context) {
+    QuickAlert.show(
+      context: context,
+      type: QuickAlertType.confirm,
+      title: 'Confirm Delete',
+      text: 'Do you want to delete the selected document?',
+      confirmBtnText: 'Delete',
+      cancelBtnText: 'Cancel',
+      confirmBtnColor: Color(0xFFd33f8d),
+      onCancelBtnTap: () {
+        Navigator.of(context).pop();
+      },
+      onConfirmBtnTap: () async {
+        Navigator.of(context).pop();
+        _deleteDocument(context);
+      },
+    );
+  }
 
   void _deleteDocument(BuildContext context) async {
     try {
@@ -68,7 +88,7 @@ class DocumentCard extends StatelessWidget {
                     maxLines: 2, // Limit title to 2 lines
                     overflow: TextOverflow.ellipsis, // Handle long titles
                   ),
-                  Text('size: ${fileInfo.size} kb'),
+                  Text('size: ${fileInfo.size} bytes'),
                   SizedBox(height: 8.0),
                   GestureDetector(
                     onTap: () async {
@@ -92,7 +112,7 @@ class DocumentCard extends StatelessWidget {
             ),
             IconButton(
               icon: Icon(Icons.delete),
-              onPressed: () => _deleteDocument(context),
+              onPressed: () => _showDeleteConfirmationDialog(context),
             ),
           ],
         ),
