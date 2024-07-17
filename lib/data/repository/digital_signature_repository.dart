@@ -55,7 +55,7 @@ class DigitalSignatureRepository {
 
       // Send the POST request with the mode in the request body
       Response response = await _dio.download(
-        "$baseUrl/generate-keypair",
+        "$baseUrl/generate-keypair-mode",
         savePath,
         options: Options(method: 'POST'),
         data: {
@@ -87,43 +87,45 @@ class DigitalSignatureRepository {
     }
   }
 
-  Future<Map<String, dynamic>> signDetached(String pdfFilePath, String privateKeyPath, String mode) async {
+  Future<Map<String, dynamic>> signDetached(String pdfFilePath, String privateKeyPath) async {
     try {
       // Preparing the API endpoint URL
-      Uri apiUrl = Uri.parse("$baseUrl/sign-message");
+      String apiUrl = "$baseUrl/sign-message-mode";
 
-      // Creating multipart request
-      var request = http.MultipartRequest('POST', apiUrl);
-
-      // Adding PDF file to the request
+      // Checking if PDF file exists
       File pdfFile = File(pdfFilePath);
       if (!pdfFile.existsSync()) {
         throw Exception("PDF file does not exist");
       }
-      request.files.add(await http.MultipartFile.fromPath('message', pdfFilePath));
 
-      // Adding private key file to the request
+      // Checking if private key file exists
       File privateKeyFile = File(privateKeyPath);
       if (!privateKeyFile.existsSync()) {
         throw Exception("Private key file does not exist");
       }
-      request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
+      // Extracting file name from PDF path
+      // String pdfFileName = pdfFile.path.split('/').last;
 
-      // Adding mode to the request
-      request.fields['mode'] = mode;
+      // Creating multipart form data
+      FormData formData = FormData.fromMap({
+        'message': await MultipartFile.fromFile(pdfFilePath),
+        'privateKey': await MultipartFile.fromFile(privateKeyPath),
+      });
+            print("test");
+
+
 
       // Record start time
       DateTime startTime = DateTime.now();
 
       // Sending the request
-      var response = await request.send();
+      Response response = await _dio.post(apiUrl, data: formData);
 
       // Record end time
       DateTime endTime = DateTime.now();
 
       // Calculate execution time
       Duration executionTime = endTime.difference(startTime);
-
       // Checking the response
       if (response.statusCode == 200) {
         // Saving the response as signature file
@@ -144,22 +146,22 @@ class DigitalSignatureRepository {
           savePath = newSavePath;
         }
 
-        var bytes = await response.stream.toBytes();
-        await File(savePath).writeAsBytes(bytes, flush: true);
+        // Writing the response data to file
+        await file.writeAsBytes(response.data, flush: true);
         print("Signature file downloaded successfully: $savePath");
 
         return {
           "savePath": savePath,
-          "executionTime": executionTime.inMicroseconds, // Return the execution time in milliseconds
+          "executionTime": executionTime.inMicroseconds, // Return the execution time in microseconds
         };
       } else {
         // Handling errors
         print("Failed to download signature file. Status code: ${response.statusCode}");
-        throw Exception("Failed to sign detached");
+        throw Exception("Failed to sign detached test");
       }
     } catch (error) {
       print("Error signing detached: $error");
-      throw Exception("Failed to sign detached");
+      throw Exception("Failed to sign detached test 123");
     }
   }
 

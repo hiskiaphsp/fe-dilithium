@@ -86,10 +86,11 @@ class _SignPageState extends State<SignPage> {
       Map<String, dynamic> result;
       if (widget.isOnline) {
         result = await repository.signDetachedUrl(selectedUrl!, privateFile.path, selectedMode!);
+        print(result);
         showSuccessDialogOnline(context, privateFile, selectedFileName!, result['executionTime']);
       } else {
         File messageFile = pickedMessageFile.first;
-        result = await repository.signDetached(messageFile.path, privateFile.path, selectedMode!);
+        result = await repository.signDetached(messageFile.path, privateFile.path);
         showSuccessDialogOffline(context, privateFile, messageFile, result['executionTime']);
       }
     } catch (e) {
