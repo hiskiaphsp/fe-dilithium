@@ -103,6 +103,7 @@ class DigitalSignatureRepository {
       if (!privateKeyFile.existsSync()) {
         throw Exception("Private key file does not exist");
       }
+
       // Extracting file name from PDF path
       // String pdfFileName = pdfFile.path.split('/').last;
 
@@ -111,9 +112,6 @@ class DigitalSignatureRepository {
         'message': await MultipartFile.fromFile(pdfFilePath),
         'privateKey': await MultipartFile.fromFile(privateKeyPath),
       });
-            print("test");
-
-
 
       // Record start time
       DateTime startTime = DateTime.now();
@@ -157,11 +155,11 @@ class DigitalSignatureRepository {
       } else {
         // Handling errors
         print("Failed to download signature file. Status code: ${response.statusCode}");
-        throw Exception("Failed to sign detached test");
+        throw Exception("Failed to sign detached");
       }
     } catch (error) {
       print("Error signing detached: $error");
-      throw Exception("Failed to sign detached test 123");
+      throw Exception("Failed to sign detached");
     }
   }
 
