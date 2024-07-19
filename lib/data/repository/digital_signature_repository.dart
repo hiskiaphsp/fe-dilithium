@@ -90,40 +90,37 @@ class DigitalSignatureRepository {
   Future<Map<String, dynamic>> signDetached(String pdfFilePath, String privateKeyPath) async {
     try {
       // Preparing the API endpoint URL
-      String apiUrl = "$baseUrl/sign-message-mode";
+      Uri apiUrl = Uri.parse("$baseUrl/sign-message-mode");
 
-      // Checking if PDF file exists
+      // Creating multipart request
+      var request = http.MultipartRequest('POST', apiUrl);
+
+      // Adding PDF file to the request
       File pdfFile = File(pdfFilePath);
       if (!pdfFile.existsSync()) {
         throw Exception("PDF file does not exist");
       }
+      request.files.add(await http.MultipartFile.fromPath('message', pdfFilePath));
 
-      // Checking if private key file exists
+      // Adding private key file to the request
       File privateKeyFile = File(privateKeyPath);
       if (!privateKeyFile.existsSync()) {
         throw Exception("Private key file does not exist");
       }
-
-      // Extracting file name from PDF path
-      // String pdfFileName = pdfFile.path.split('/').last;
-
-      // Creating multipart form data
-      FormData formData = FormData.fromMap({
-        'message': await MultipartFile.fromFile(pdfFilePath),
-        'privateKey': await MultipartFile.fromFile(privateKeyPath),
-      });
+      request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
 
       // Record start time
       DateTime startTime = DateTime.now();
 
       // Sending the request
-      Response response = await _dio.post(apiUrl, data: formData);
+      var response = await request.send();
 
       // Record end time
       DateTime endTime = DateTime.now();
 
       // Calculate execution time
       Duration executionTime = endTime.difference(startTime);
+
       // Checking the response
       if (response.statusCode == 200) {
         // Saving the response as signature file
@@ -144,13 +141,13 @@ class DigitalSignatureRepository {
           savePath = newSavePath;
         }
 
-        // Writing the response data to file
-        await file.writeAsBytes(response.data, flush: true);
+        var bytes = await response.stream.toBytes();
+        await File(savePath).writeAsBytes(bytes, flush: true);
         print("Signature file downloaded successfully: $savePath");
 
         return {
           "savePath": savePath,
-          "executionTime": executionTime.inMicroseconds, // Return the execution time in microseconds
+          "executionTime": executionTime.inMicroseconds, // Return the execution time in milliseconds
         };
       } else {
         // Handling errors
@@ -163,7 +160,7 @@ class DigitalSignatureRepository {
     }
   }
 
-  Future<Map<String, dynamic>> signDetachedUrl(String messageUrl, String privateKeyPath, String mode) async {
+  Future<Map<String, dynamic>> signDetachedUrl(String messageUrl, String privateKeyPath) async {
     try {
       // Preparing the API endpoint URL
       Uri apiUrl = Uri.parse("$baseUrl/sign-message-url");
@@ -177,9 +174,6 @@ class DigitalSignatureRepository {
         throw Exception("Private key file does not exist");
       }
       request.files.add(await http.MultipartFile.fromPath('privateKey', privateKeyPath));
-
-      // Adding mode to the request
-      request.fields['mode'] = mode;
 
       // Adding messageUrl to the request
       request.fields['messageURL'] = messageUrl;
@@ -235,7 +229,7 @@ class DigitalSignatureRepository {
     }
   }
 
-  Future<Map<String, dynamic>> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath, String mode) async {
+  Future<Map<String, dynamic>> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath) async {
     try {
       // Ensuring file paths are not null
       if (pdfFilePath.isEmpty || signaturePath.isEmpty || publicKeyPath.isEmpty) {
@@ -250,15 +244,18 @@ class DigitalSignatureRepository {
       // Start time measurement
       final stopwatch = Stopwatch()..start();
 
-      // Sending verification request to the server
-      Uri apiUrl = Uri.parse("$baseUrl/verify-signature");
-      var request = http.MultipartRequest('POST', apiUrl)
-        ..files.add(await http.MultipartFile.fromPath('message', pdfFilePath))
-        ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
-        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath))
-        ..fields['mode'] = mode;  // Adding mode to the request
+      // Preparing the API endpoint URL
+      String apiUrl = "$baseUrl/verify-signature-mode";
 
-      var response = await request.send();
+      // Creating form data
+      FormData formData = FormData.fromMap({
+        'message': await MultipartFile.fromFile(pdfFilePath),
+        'signature': await MultipartFile.fromFile(signaturePath),
+        'publicKey': await MultipartFile.fromFile(publicKeyPath),
+      });
+
+      // Sending the request
+      Response response = await _dio.post(apiUrl, data: formData);
 
       // Stop time measurement
       stopwatch.stop();
@@ -267,7 +264,7 @@ class DigitalSignatureRepository {
       // Checking the response
       if (response.statusCode == 200) {
         // Parsing JSON response
-        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString());
+        Map<String, dynamic> data = response.data;
         bool verified = data['valid'];
 
         print(verified);
@@ -288,8 +285,8 @@ class DigitalSignatureRepository {
       throw Exception("Failed to verify signature: $error");
     }
   }
-
-  Future<Map<String, dynamic>> verifyDetachedUrl(String messageUrl, String signaturePath, String publicKeyPath, String mode) async {
+    
+  Future<Map<String, dynamic>> verifyDetachedUrl(String messageUrl, String signaturePath, String publicKeyPath) async {
     try {
       // Start time measurement
       final stopwatch = Stopwatch()..start();
@@ -299,8 +296,7 @@ class DigitalSignatureRepository {
       var request = http.MultipartRequest('POST', apiUrl)
         ..fields['messageURL'] = messageUrl
         ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
-        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath))
-        ..fields['mode'] = mode;
+        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath));
 
       var response = await request.send();
 

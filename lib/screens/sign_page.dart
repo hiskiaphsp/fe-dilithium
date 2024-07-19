@@ -24,7 +24,6 @@ class _SignPageState extends State<SignPage> {
   final DocumentRepository documentRepository = DocumentRepository();
   List<File> pickedPrivateFile = [];
   List<File> pickedMessageFile = [];
-  String? selectedMode;
   String? selectedUrl;
   List<FileInfo> fileInfos = [];
   List? selectedFileName = [];
@@ -85,7 +84,7 @@ class _SignPageState extends State<SignPage> {
       File privateFile = pickedPrivateFile.first;
       Map<String, dynamic> result;
       if (widget.isOnline) {
-        result = await repository.signDetachedUrl(selectedUrl!, privateFile.path, selectedMode!);
+        result = await repository.signDetachedUrl(selectedUrl!, privateFile.path);
         print(result);
         showSuccessDialogOnline(context, privateFile, selectedFileName!, result['executionTime']);
       } else {
@@ -196,16 +195,6 @@ class _SignPageState extends State<SignPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  CustomSingleSelectField<String>(
-                    items: ["Dilithium2", "Dilithium3", "Dilithium5"],
-                    title: "Select Mode",
-                    onSelectionDone: (value) {
-                      setState(() {
-                        selectedMode = value;
-                      });
-                    },
-                    itemAsString: (item) => item,
-                  ),
                   SizedBox(height: 10),
                   if (widget.isOnline) // Tampilkan hanya jika isOnline true
                     CustomSingleSelectField<String>(

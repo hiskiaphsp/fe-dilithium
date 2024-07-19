@@ -25,7 +25,6 @@ class _VerificationPageState extends State<VerificationPage> {
   List<File> pickedPublicFile = [];
   List<File> pickedMessageFile = [];
   List<File> pickedSignatureFile = [];
-  String? selectedMode;
   String? selectedMessageUrl;
   List? selectedFileName = []; // Added to store selected message URL
   List<FileInfo> messageFileInfos = []; // Added to store message file infos
@@ -80,8 +79,8 @@ class _VerificationPageState extends State<VerificationPage> {
 
 
 void verifySignature(BuildContext context) async {
-  if (pickedPublicFile.isEmpty || selectedMode == null || (!widget.isOnline && (pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty))) {
-    showErrorDialog(context, "Please select all files and mode.");
+  if (pickedPublicFile.isEmpty || (!widget.isOnline && (pickedMessageFile.isEmpty || pickedSignatureFile.isEmpty))) {
+    showErrorDialog(context, "Please select all files.");
     return;
   }
 
@@ -95,7 +94,6 @@ void verifySignature(BuildContext context) async {
         selectedMessageUrl!,
         signatureFile.path,
         publicFile.path,
-        selectedMode!,
       );
       bool verified = result['verified'];
       executionTime = result['executionTime'];
@@ -106,7 +104,6 @@ void verifySignature(BuildContext context) async {
         messageFile.path,
         signatureFile.path,
         publicFile.path,
-        selectedMode!,
       );
       bool verified = result['verified'];
       executionTime = result['executionTime'];
@@ -232,17 +229,6 @@ void verifySignature(BuildContext context) async {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  CustomSingleSelectField<String>(
-                    items: ["Dilithium2", "Dilithium3", "Dilithium5"],
-                    title: "Select Mode",
-                    onSelectionDone: (value) {
-                      setState(() {
-                        selectedMode = value;
-                      });
-                    },
-                    itemAsString: (item) => item,
-                  ),
-                  SizedBox(height: 10),
                   if (widget.isOnline)
                     CustomSingleSelectField<String>(
                       items: messageFileNames,
