@@ -39,10 +39,10 @@ class _DocumentPageState extends State<DocumentPage> {
 
       if (result != null) {
         File file = File(result.files.single.path!);
-        if (file.lengthSync() > 5 * 1024 * 1024) { // Check if file size is greater than 5 MB
+        if (file.lengthSync() > 2 * 1024 * 1024) { // Check if file size is greater than 5 MB
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('File size exceeds 5 MB'),
+              content: Text('File size exceeds 2 MB'),
               backgroundColor: Colors.red, // Set the background color to red
             ),
           );

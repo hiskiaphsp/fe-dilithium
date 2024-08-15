@@ -1,28 +1,39 @@
-// file_info.dart
 class Document {
-  String id;
+  int id;
   String filename;
   String path;
+  String createdAt;
+  String updatedAt;
+  String? deletedAt;
 
   Document({
     required this.id,
     required this.filename,
     required this.path,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
   });
 
   factory Document.fromJson(Map<String, dynamic> json) {
     return Document(
-      id: json['_id'],
+      id: json['ID'],
       filename: json['filename'],
       path: json['path'],
+      createdAt: json['CreatedAt'],
+      updatedAt: json['UpdatedAt'],
+      deletedAt: json['DeletedAt'],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      '_id': id,
+      'ID': id,
       'filename': filename,
       'path': path,
+      'CreatedAt': createdAt,
+      'UpdatedAt': updatedAt,
+      'DeletedAt': deletedAt,
     };
   }
 }
@@ -51,7 +62,6 @@ class FileInfo {
       'document': document.toJson(),
       'url': url,
       'size': size,
-
     };
   }
 }

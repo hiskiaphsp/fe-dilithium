@@ -55,7 +55,7 @@ class DigitalSignatureRepository {
 
       // Send the POST request with the mode in the request body
       Response response = await _dio.download(
-        "$baseUrl/generate-keypair-mode",
+        "$baseUrl/generate-keypair",
         savePath,
         options: Options(method: 'POST'),
         data: {
@@ -90,7 +90,7 @@ class DigitalSignatureRepository {
   Future<Map<String, dynamic>> signDetached(String pdfFilePath, String privateKeyPath) async {
     try {
       // Preparing the API endpoint URL
-      Uri apiUrl = Uri.parse("$baseUrl/sign-message-mode");
+      Uri apiUrl = Uri.parse("$baseUrl/sign-message");
 
       // Creating multipart request
       var request = http.MultipartRequest('POST', apiUrl);
@@ -123,35 +123,30 @@ class DigitalSignatureRepository {
 
       // Checking the response
       if (response.statusCode == 200) {
-        // Saving the response as signature file
-        String downloadPath = await _getDownloadDirectoryPath();
-        String savePath = '$downloadPath/signature.sig';
+        // Parsing response data
+        var responseBody = await response.stream.bytesToString();
+        var jsonResponse = jsonDecode(responseBody);
 
-        // Check if file already exists
-        File file = File(savePath);
-        if (await file.exists()) {
-          // If file already exists, find a unique name
-          int count = 1;
-          String newSavePath;
-          do {
-            newSavePath = '$downloadPath/signature-$count.sig';
-            file = File(newSavePath);
-            count++;
-          } while (await file.exists());
-          savePath = newSavePath;
-        }
+        // Extracting server execution time
+        int serverExecutionTime = jsonResponse['data']['execution_time'];
+        int signTime = jsonResponse['data']['sign_time'];
+        int communicationSize = jsonResponse['data']['communication_size_bytes'];
+        int memoryUsage = jsonResponse['data']['memory_usage_bytes'];
+        String variant = jsonResponse['data']['variant'];
 
-        var bytes = await response.stream.toBytes();
-        await File(savePath).writeAsBytes(bytes, flush: true);
-        print("Signature file downloaded successfully: $savePath");
+
 
         return {
-          "savePath": savePath,
-          "executionTime": executionTime.inMicroseconds, // Return the execution time in milliseconds
+          "frontEndExecutionTime": executionTime.inMicroseconds, // Frontend execution time
+          "serverExecutionTime": serverExecutionTime, // Server execution time
+          "signTime": signTime, // Signature time
+          "communicationSize": communicationSize,
+          "memoryUsage": memoryUsage,
+          "variant": variant
         };
       } else {
         // Handling errors
-        print("Failed to download signature file. Status code: ${response.statusCode}");
+        print("Failed to sign file. Status code: ${response.statusCode}");
         throw Exception("Failed to sign detached");
       }
     } catch (error) {
@@ -192,35 +187,29 @@ class DigitalSignatureRepository {
 
       // Checking the response
       if (response.statusCode == 200) {
-        // Saving the response as signature file
-        String downloadPath = await _getDownloadDirectoryPath();
-        String savePath = '$downloadPath/signature.sig';
+        // Parsing response data
+        var responseBody = await response.stream.bytesToString();
+        var jsonResponse = jsonDecode(responseBody);
 
-        // Check if file already exists
-        File file = File(savePath);
-        if (await file.exists()) {
-          // If file already exists, find a unique name
-          int count = 1;
-          String newSavePath;
-          do {
-            newSavePath = '$downloadPath/signature-$count.sig';
-            file = File(newSavePath);
-            count++;
-          } while (await file.exists());
-          savePath = newSavePath;
-        }
-
-        var bytes = await response.stream.toBytes();
-        await File(savePath).writeAsBytes(bytes, flush: true);
-        print("Signature file downloaded successfully: $savePath");
+        // Extracting server execution time
+        int serverExecutionTime = jsonResponse['data']['execution_time'];
+        int signTime = jsonResponse['data']['sign_time'];
+        int communicationSize = jsonResponse['data']['communication_size_bytes'];
+        int memoryUsage = jsonResponse['data']['memory_usage_bytes'];
+        String variant = jsonResponse['data']['variant'];
 
         return {
-          "savePath": savePath,
-          "executionTime": executionTime.inMicroseconds, // Return the execution time in milliseconds
+          "frontEndExecutionTime": executionTime.inMicroseconds, // Frontend execution time
+          "serverExecutionTime": serverExecutionTime, // Server execution time
+          "signTime": signTime, // Signature time
+          "communicationSize": communicationSize,
+          "memoryUsage": memoryUsage,
+          "variant": variant,
+
         };
       } else {
         // Handling errors
-        print("Failed to download signature file. Status code: ${response.statusCode}");
+        print("Failed to sign file. Status code: ${response.statusCode}");
         throw Exception("Failed to sign detached");
       }
     } catch (error) {
@@ -229,104 +218,99 @@ class DigitalSignatureRepository {
     }
   }
 
-  Future<Map<String, dynamic>> verifyDetached(String pdfFilePath, String signaturePath, String publicKeyPath) async {
+  Future<Map<String, dynamic>> verifyDetached(String pdfFilePath, String publicKeyPath) async {
     try {
-      // Ensuring file paths are not null
-      if (pdfFilePath.isEmpty || signaturePath.isEmpty || publicKeyPath.isEmpty) {
-        throw Exception("File paths cannot be null or empty");
-      }
+      final frontendStopwatch = Stopwatch()..start();
 
-      // Ensuring files exist
-      if (!File(pdfFilePath).existsSync() || !File(signaturePath).existsSync() || !File(publicKeyPath).existsSync()) {
-        throw Exception("One or more files do not exist");
-      }
-
-      // Start time measurement
-      final stopwatch = Stopwatch()..start();
-
-      // Preparing the API endpoint URL
-      String apiUrl = "$baseUrl/verify-signature-mode";
-
-      // Creating form data
-      FormData formData = FormData.fromMap({
-        'message': await MultipartFile.fromFile(pdfFilePath),
-        'signature': await MultipartFile.fromFile(signaturePath),
-        'publicKey': await MultipartFile.fromFile(publicKeyPath),
-      });
-
-      // Sending the request
-      Response response = await _dio.post(apiUrl, data: formData);
-
-      // Stop time measurement
-      stopwatch.stop();
-      int executionTime = stopwatch.elapsedMicroseconds;
-
-      // Checking the response
-      if (response.statusCode == 200) {
-        // Parsing JSON response
-        Map<String, dynamic> data = response.data;
-        bool verified = data['valid'];
-
-        print(verified);
-        return {
-          'verified': verified,
-          'executionTime': executionTime,
-        };
-      } else {
-        // Handling errors
-        print("Failed to verify signature. Status code: ${response.statusCode}");
-        return {
-          'verified': false,
-          'executionTime': executionTime,
-        };
-      }
-    } catch (error) {
-      print("Error verifying signature: $error");
-      throw Exception("Failed to verify signature: $error");
-    }
-  }
-    
-  Future<Map<String, dynamic>> verifyDetachedUrl(String messageUrl, String signaturePath, String publicKeyPath) async {
-    try {
-      // Start time measurement
-      final stopwatch = Stopwatch()..start();
-
-      // Sending verification request to the server
-      Uri apiUrl = Uri.parse("$baseUrl/verify-signature-url");
+      Uri apiUrl = Uri.parse("$baseUrl/verify-signature");
       var request = http.MultipartRequest('POST', apiUrl)
-        ..fields['messageURL'] = messageUrl
-        ..files.add(await http.MultipartFile.fromPath('signature', signaturePath))
+        ..files.add(await http.MultipartFile.fromPath('message', pdfFilePath))
         ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath));
 
       var response = await request.send();
 
-      // Stop time measurement
-      stopwatch.stop();
-      int executionTime = stopwatch.elapsedMicroseconds;
+      frontendStopwatch.stop();
+      int frontendExecutionTime = frontendStopwatch.elapsedMicroseconds;
 
-      // Checking the response
       if (response.statusCode == 200) {
-        // Parsing JSON response
-        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString());
+        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString())['data'];
         bool verified = data['valid'];
+        int serverExecutionTime = data['execution_time'];
+        int verificationTime = data['verification_time'];
+        int communicationSize = data['communication_size_bytes'];
+        int memoryUsage = data['memory_usage_bytes'];
+        String variant = data['variant'];
 
-        print(verified);
         return {
           'verified': verified,
-          'executionTime': executionTime,
+          'frontendExecutionTime': frontendExecutionTime,
+          'serverExecutionTime': serverExecutionTime,
+          'verificationTime': verificationTime,
+          "communicationSize": communicationSize,
+          "memoryUsage": memoryUsage,
+          "variant": variant,
         };
       } else {
-        // Handling errors
-        print("Failed to verify signature. Status code: ${response.statusCode}");
+        Map<String, dynamic> errorResponse = jsonDecode(await response.stream.bytesToString());
+        String message = errorResponse['message'] ?? 'Failed Data';
+
         return {
           'verified': false,
-          'executionTime': executionTime,
+          'message': message,
+          'status': response.statusCode,
         };
       }
     } catch (error) {
-      print("Error verifying signature: $error");
       throw Exception("Failed to verify signature: $error");
     }
   }
+
+  Future<Map<String, dynamic>> verifyDetachedUrl(String messageUrl, String publicKeyPath) async {
+    try {
+      final frontendStopwatch = Stopwatch()..start();
+
+      Uri apiUrl = Uri.parse("$baseUrl/verify-signature-url");
+      var request = http.MultipartRequest('POST', apiUrl)
+        ..fields['messageURL'] = messageUrl
+        ..files.add(await http.MultipartFile.fromPath('publicKey', publicKeyPath));
+
+      var response = await request.send();
+
+      frontendStopwatch.stop();
+      int frontendExecutionTime = frontendStopwatch.elapsedMicroseconds;
+
+      if (response.statusCode == 200) {
+        Map<String, dynamic> data = jsonDecode(await response.stream.bytesToString())['data'];
+        bool verified = data['valid'];
+        int serverExecutionTime = data['execution_time'];
+        int verificationTime = data['verification_time'];
+        int communicationSize = data['communication_size_bytes'];
+        int memoryUsage = data['memory_usage_bytes'];
+        String variant = data['variant'];
+
+        return {
+          'verified': verified,
+          'frontendExecutionTime': frontendExecutionTime,
+          'serverExecutionTime': serverExecutionTime,
+          'verificationTime': verificationTime,
+          "communicationSize": communicationSize,
+          "memoryUsage": memoryUsage,
+          "variant": variant,
+        };
+      } else {
+        Map<String, dynamic> errorResponse = jsonDecode(await response.stream.bytesToString());
+        String message = errorResponse['message'] ?? 'Failed Data';
+
+        return {
+          'verified': false,
+          'message': message,
+          'status': response.statusCode,
+        };
+      }
+    } catch (error) {
+      throw Exception("Failed to verify signature: $error");
+    }
+  }
+
 
 }

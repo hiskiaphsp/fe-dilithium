@@ -35,7 +35,7 @@ class _GenerateKeyPageState extends State<GenerateKeyPage> {
         backgroundColor = Colors.white;
         type = true;
       } else {
-        message = 'Please select a mode';
+        message = 'Please select a Variant';
         backgroundColor = Colors.white;
         type = false;
       }
@@ -88,7 +88,7 @@ class _GenerateKeyPageState extends State<GenerateKeyPage> {
                   width: 200,
                   child: CustomSingleSelectField<String>(
                     items: dataString,
-                    title: "Select Mode",
+                    title: "Select Variant",
                     onSelectionDone: (value) {
                       selectedString = value;
                       setState(() {});

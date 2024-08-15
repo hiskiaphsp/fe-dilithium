@@ -46,7 +46,7 @@ class _SignPageState extends State<SignPage> {
   }
 
   Future<void> pickFile(BuildContext context, List<File> fileList, List<String> allowedExtensions) async {
-    const int maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+    const int maxFileSize = 2 * 1024 * 1024; // 5MB in bytes
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
@@ -58,7 +58,7 @@ class _SignPageState extends State<SignPage> {
       int fileSize = await pickedFile.length();
 
       if (fileSize > maxFileSize) {
-        showErrorDialog(context, "File size exceeds 5MB. Please select a smaller file.");
+        showErrorDialog(context, "File size exceeds 2MB. Please select a smaller file.");
         return;
       }
 
@@ -84,13 +84,13 @@ class _SignPageState extends State<SignPage> {
       File privateFile = pickedPrivateFile.first;
       Map<String, dynamic> result;
       if (widget.isOnline) {
+        print(selectedUrl);
         result = await repository.signDetachedUrl(selectedUrl!, privateFile.path);
-        print(result);
-        showSuccessDialogOnline(context, privateFile, selectedFileName!, result['executionTime']);
+        showSuccessDialogOnline(context, privateFile, selectedFileName!, result['frontEndExecutionTime'], result['serverExecutionTime'], result['signTime'], result['communicationSize'], result['memoryUsage'], result['variant']);
       } else {
         File messageFile = pickedMessageFile.first;
         result = await repository.signDetached(messageFile.path, privateFile.path);
-        showSuccessDialogOffline(context, privateFile, messageFile, result['executionTime']);
+        showSuccessDialogOffline(context, privateFile, messageFile, result['frontEndExecutionTime'], result['serverExecutionTime'], result['signTime'], result['communicationSize'], result['memoryUsage'], result['variant']);
       }
     } catch (e) {
       showErrorDialog(context, "Failed to generate signature: $e");
@@ -107,17 +107,23 @@ class _SignPageState extends State<SignPage> {
     );
   }
 
-  void showSuccessDialogOnline(BuildContext context, File privateFile, List fileName, int executionTime) {
+  void showSuccessDialogOnline(BuildContext context, File privateFile, List fileName, int frontEndExecutionTime, int serverExecutionTime, int signTime, int communicationSize, int memoryUsage, String variant) {
     QuickAlert.show(
       context: context,
       type: QuickAlertType.success,
-      text: "Signature generated successfully\nExecution Time: ${executionTime} μs",
+      text: "Signature generated successfully",
       widget: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           buildFileDetailRow("Private Key File:", basename(privateFile.path), '${privateFile.lengthSync()} bytes'),
           buildFileDetailRow("Signed File:", fileName[0], '${fileName[1]} bytes'),
+          Text("Variant: $variant"),
+          Text("Frontend Execution Time: $frontEndExecutionTime μs"),
+          Text("Server Execution Time: $serverExecutionTime μs"),
+          Text("Sign Execution Time: $signTime μs"),
+          Text("Communication Size: $communicationSize bytes"),
+          Text("Memory Usage: $memoryUsage bytes"),
         ],
       ),
       confirmBtnColor: Color(0xFF18c46c),
@@ -125,17 +131,23 @@ class _SignPageState extends State<SignPage> {
     );
   }
 
-  void showSuccessDialogOffline(BuildContext context, File privateFile, File messageFile, int executionTime) {
+  void showSuccessDialogOffline(BuildContext context, File privateFile, File messageFile, int frontEndExecutionTime, int serverExecutionTime, int signTime, int communicationSize, int memoryUsage, String variant) {
     QuickAlert.show(
       context: context,
       type: QuickAlertType.success,
-      text: "Signature generated successfully\nExecution Time: ${executionTime} μs",
+      text: "Signature generated successfully",
       widget: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           buildFileDetailRow("Private Key File:", basename(privateFile.path), '${privateFile.lengthSync()} bytes'),
           buildFileDetailRow("Message File:", basename(messageFile.path), '${messageFile.lengthSync()} bytes'),
+          Text("Variant: $variant"),
+          Text("Frontend Execution Time: $frontEndExecutionTime μs"),
+          Text("Server Execution Time: $serverExecutionTime μs"),
+          Text("Sign Execution Time: $signTime μs"),
+          Text("Communication Size: $communicationSize bytes"),
+          Text("Memory Usage: $memoryUsage bytes"),
         ],
       ),
       confirmBtnColor: Color(0xFF18c46c),

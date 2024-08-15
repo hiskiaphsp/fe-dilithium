@@ -1,7 +1,5 @@
 import 'dart:io';
-
 import 'package:dio/dio.dart';
-import 'package:http/http.dart' as http;
 import 'package:fe/data/models/document.dart';
 
 class DocumentRepository {
@@ -16,7 +14,7 @@ class DocumentRepository {
       final response = await _dio.get('$baseUrl/documents');
 
       if (response.statusCode == 200) {
-        List<dynamic> data = response.data;
+        List<dynamic> data = response.data['data'];
         return parseFileInfoList(data);
       } else {
         throw Exception('Failed to load documents');
@@ -26,9 +24,9 @@ class DocumentRepository {
     }
   }
 
- Future<void> addDocument(File file) async {
+  Future<void> addDocument(File file) async {
     try {
-      String fileName = file.path.split('/').last; // Extract filename from path
+      String fileName = file.path.split('/').last;
 
       FormData formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(
@@ -47,7 +45,7 @@ class DocumentRepository {
     }
   }
 
-  Future<void> deleteDocument(String documentId) async {
+  Future<void> deleteDocument(int documentId) async {
     try {
       final response = await _dio.delete('$baseUrl/documents/$documentId');
 
@@ -64,11 +62,10 @@ class DocumentRepository {
       final response = await _dio.get('$baseUrl/documents');
 
       if (response.statusCode == 200) {
-        List<dynamic> data = response.data;
+        List<dynamic> data = response.data['data'];
         List<FileInfo> fileInfoList = parseFileInfoList(data);
 
-        List<String> urls = fileInfoList.map((fileInfo) => fileInfo.url).toList();
-        return urls;
+        return fileInfoList.map((fileInfo) => fileInfo.url).toList();
       } else {
         throw Exception('Failed to load documents');
       }
@@ -82,11 +79,10 @@ class DocumentRepository {
       final response = await _dio.get('$baseUrl/documents');
 
       if (response.statusCode == 200) {
-        List<dynamic> data = response.data;
+        List<dynamic> data = response.data['data'];
         List<FileInfo> fileInfoList = parseFileInfoList(data);
 
-        List<String> filenames = fileInfoList.map((fileInfo) => fileInfo.document.filename).toList();
-        return filenames;
+        return fileInfoList.map((fileInfo) => fileInfo.document.filename).toList();
       } else {
         throw Exception('Failed to load documents');
       }
@@ -97,7 +93,7 @@ class DocumentRepository {
 
   Future<Map<String, dynamic>> analyze(File file, String mode) async {
     try {
-      String fileName = file.path.split('/').last; // Extract filename from path
+      String fileName = file.path.split('/').last;
       FormData formData = FormData.fromMap({
         'message': await MultipartFile.fromFile(
           file.path,
@@ -109,12 +105,12 @@ class DocumentRepository {
       final response = await _dio.post('$baseUrl/analyze', data: formData);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to add document');
+        throw Exception('Failed to analyze document');
       }
 
       return response.data;
     } catch (e) {
-      throw Exception('Failed to add document: $e');
+      throw Exception('Failed to analyze document: $e');
     }
   }
 
@@ -128,13 +124,12 @@ class DocumentRepository {
       final response = await _dio.post('$baseUrl/analyze-url', data: formData);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to add document');
+        throw Exception('Failed to analyze document');
       }
 
       return response.data;
     } catch (e) {
-      throw Exception('Failed to add document: $e');
+      throw Exception('Failed to analyze document: $e');
     }
   }
-
 }
